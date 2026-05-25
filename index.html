@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <title>AWS ECS on EC2 - Production Style CI/CD</title>
+
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: Arial, sans-serif;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #0f172a, #1e293b);
+      color: white;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 900px;
+      padding: 38px;
+      border-radius: 24px;
+      background: rgba(255, 255, 255, 0.06);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+      text-align: center;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 9px 18px;
+      border-radius: 999px;
+      background-color: #22c55e;
+      color: #052e16;
+      font-weight: bold;
+      margin-bottom: 20px;
+      font-size: 0.9rem;
+    }
+
+    h1 {
+      font-size: 2.7rem;
+      margin-bottom: 18px;
+      line-height: 1.2;
+    }
+
+    p {
+      font-size: 1.05rem;
+      line-height: 1.7;
+      color: #e2e8f0;
+      margin-bottom: 16px;
+    }
+
+    .architecture-box {
+      margin-top: 26px;
+      padding: 22px;
+      border-radius: 18px;
+      background: rgba(15, 23, 42, 0.65);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      text-align: left;
+    }
+
+    .architecture-box h2 {
+      margin-bottom: 16px;
+      font-size: 1.3rem;
+      color: #38bdf8;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px 24px;
+    }
+
+    .item {
+      color: #cbd5e1;
+      font-size: 0.98rem;
+    }
+
+    .item::before {
+      content: "✔";
+      color: #22c55e;
+      margin-right: 8px;
+      font-weight: bold;
+    }
+
+    .flow {
+      margin-top: 24px;
+      padding: 16px;
+      border-radius: 16px;
+      background: rgba(56, 189, 248, 0.08);
+      border: 1px solid rgba(56, 189, 248, 0.18);
+      color: #e0f2fe;
+      font-size: 0.98rem;
+      line-height: 1.6;
+    }
+
+    footer {
+      margin-top: 28px;
+      color: #94a3b8;
+      font-size: 0.85rem;
+    }
+
+    @media (max-width: 768px) {
+      .container {
+        padding: 30px 22px;
+      }
+
+      h1 {
+        font-size: 2.1rem;
+      }
+
+      p {
+        font-size: 0.98rem;
+      }
+
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="container">
+
+    <div class="badge">
+      ECS Deployment Successful
+    </div>
+
+    <h1>
+      AWS ECS on EC2 <br />
+      Production-Style CI/CD
+    </h1>
+
+    <p>
+      An upgraded ECS on EC2 deployment using Terraform, Docker, ECR,
+      GitHub Actions, private subnets, NAT Gateway, and <strong>awsvpc</strong> networking.
+    </p>
+
+    <p>
+      The ALB stays public, while ECS EC2 instances and ECS tasks run privately
+      behind an IP-based Target Group.
+    </p>
+
+    <div class="architecture-box">
+
+      <h2>Architecture Highlights</h2>
+
+      <div class="grid">
+        <div class="item">ALB in Public Subnets</div>
+        <div class="item">ECS EC2 in Private Subnets</div>
+        <div class="item">NAT Gateway for Outbound Access</div>
+        <div class="item">ECS Tasks with Private IPs</div>
+        <div class="item"><strong>awsvpc</strong> Network Mode</div>
+        <div class="item">IP-based Target Group</div>
+        <div class="item">Docker Images in Amazon ECR</div>
+        <div class="item">Logs shipped to CloudWatch</div>
+      </div>
+
+    </div>
+
+    <div class="flow">
+      Internet → ALB → IP Target Group → ECS Task Private IP → Nginx Container
+    </div>
+
+    <footer>
+      © 2026 AWS ECS on EC2 Production-Style CI/CD Project
+    </footer>
+
+  </div>
+
+</body>
+</html>

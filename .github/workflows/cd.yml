@@ -1,0 +1,133 @@
+name: cd
+
+on:
+  workflow_run:
+    workflows: ["ci"]
+    types:
+      - completed
+
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Docker image tag to deploy. Use latest for the newest image."
+        required: true
+        default: "latest"
+
+jobs:
+  deploy:
+    name: Deploy to ECS
+    runs-on: ubuntu-latest
+    if: >-
+      ${{
+        github.event_name == 'workflow_dispatch' ||
+        github.event.workflow_run.conclusion == 'success'
+      }}
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Decide Image Tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "IMAGE_TAG=${{ github.event.inputs.image_tag }}" >> "$GITHUB_ENV"
+          else
+            echo "IMAGE_TAG=latest" >> "$GITHUB_ENV"
+          fi
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: eu-central-1
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.3.0
+          terraform_wrapper: false
+
+      - name: Read Terraform Outputs
+        run: |
+          terraform init
+
+          ECR_REPOSITORY_URL=$(terraform output -raw ecr_repository_url 2>/dev/null || true)
+          ECS_CLUSTER_NAME=$(terraform output -raw ecs_cluster_name 2>/dev/null || true)
+          ECS_SERVICE_NAME=$(terraform output -raw ecs_service_name 2>/dev/null || true)
+          TASK_DEFINITION_FAMILY=$(terraform output -raw ecs_task_definition_family 2>/dev/null || true)
+          CONTAINER_NAME=$(terraform output -raw container_name 2>/dev/null || true)
+          APPLICATION_URL=$(terraform output -raw application_url 2>/dev/null || true)
+
+          if [ -z "$ECR_REPOSITORY_URL" ] || \
+             [ -z "$ECS_CLUSTER_NAME" ] || \
+             [ -z "$ECS_SERVICE_NAME" ] || \
+             [ -z "$TASK_DEFINITION_FAMILY" ] || \
+             [ -z "$CONTAINER_NAME" ]; then
+            echo "Error: Infrastructure outputs are missing."
+            echo "Please run infrastructure.yml with action=apply first."
+            exit 1
+          fi
+
+          echo "ECR_REPOSITORY_URL=$ECR_REPOSITORY_URL" >> "$GITHUB_ENV"
+          echo "ECS_CLUSTER_NAME=$ECS_CLUSTER_NAME" >> "$GITHUB_ENV"
+          echo "ECS_SERVICE_NAME=$ECS_SERVICE_NAME" >> "$GITHUB_ENV"
+          echo "TASK_DEFINITION_FAMILY=$TASK_DEFINITION_FAMILY" >> "$GITHUB_ENV"
+          echo "CONTAINER_NAME=$CONTAINER_NAME" >> "$GITHUB_ENV"
+          echo "APPLICATION_URL=$APPLICATION_URL" >> "$GITHUB_ENV"
+
+      - name: Create New ECS Task Definition Revision
+        run: |
+          IMAGE_URI="$ECR_REPOSITORY_URL:$IMAGE_TAG"
+
+          echo "Deploying image: $IMAGE_URI"
+
+          aws ecs describe-task-definition \
+            --task-definition "$TASK_DEFINITION_FAMILY" \
+            --query taskDefinition \
+            > task-definition.json
+
+          jq --arg IMAGE_URI "$IMAGE_URI" \
+             --arg CONTAINER_NAME "$CONTAINER_NAME" \
+             '.containerDefinitions =
+                (.containerDefinitions | map(
+                  if .name == $CONTAINER_NAME
+                  then .image = $IMAGE_URI
+                  else .
+                  end
+                )) |
+              del(
+                .taskDefinitionArn,
+                .revision,
+                .status,
+                .requiresAttributes,
+                .compatibilities,
+                .registeredAt,
+                .registeredBy
+              )' \
+             task-definition.json > new-task-definition.json
+
+          NEW_TASK_DEFINITION_ARN=$(aws ecs register-task-definition \
+            --cli-input-json file://new-task-definition.json \
+            --query 'taskDefinition.taskDefinitionArn' \
+            --output text)
+
+          echo "NEW_TASK_DEFINITION_ARN=$NEW_TASK_DEFINITION_ARN" >> "$GITHUB_ENV"
+
+      - name: Update ECS Service
+        run: |
+          aws ecs update-service \
+            --cluster "$ECS_CLUSTER_NAME" \
+            --service "$ECS_SERVICE_NAME" \
+            --task-definition "$NEW_TASK_DEFINITION_ARN" \
+            --desired-count 1
+
+      - name: Wait for ECS Service Stability
+        run: |
+          aws ecs wait services-stable \
+            --cluster "$ECS_CLUSTER_NAME" \
+            --services "$ECS_SERVICE_NAME"
+
+      - name: Print Application URL
+        run: |
+          echo "App is now accessible at: $APPLICATION_URL"
